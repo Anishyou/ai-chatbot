@@ -1,0 +1,5 @@
+llm:
+  provider: "openai"
+  model: "gpt-4o"
+  embedding_model: "text-embedding-3-small"
+  api_key: "your key"
