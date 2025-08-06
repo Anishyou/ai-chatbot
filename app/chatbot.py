@@ -54,10 +54,12 @@ def ask(query: str, website: str) -> str:
         {
             "role": "system",
             "content": (
-                f"You are an assistant for {website}. "
-                "Use the provided context if available. "
-                "If the context is missing or insufficient, use general knowledge."
+                f"You are a helpful assistant for visitors of {website}. "
+                "Use the provided context from the website to answer accurately. "
+                "If the question is about the company, address, team, partners, services, or anything on the site, answer with high detail. "
+                "If unsure, say so — but do not make up facts."
             )
+
         },
         {
             "role": "user",

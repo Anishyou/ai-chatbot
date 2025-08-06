@@ -1,25 +1,6 @@
-# Byte-compiled / optimized / DLL files
+.env
 __pycache__/
-*.py[cod]
-*.so
-
-# Virtual environments
-.venv/
-env/
-venv/
-
-# Logs and local config
+*.pyc
+*.db
 *.log
-*.env
-.env.*
-config/llm_config.yml  # API key stored here
-
-# OS-specific
-.DS_Store
-Thumbs.db
-
-# VSCode
-.vscode/
-
-# Weaviate local data
 weaviate_data/

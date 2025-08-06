@@ -4,7 +4,7 @@ app:
   allowed_origins:
     - "http://localhost"
     - "http://127.0.0.1"
+  index_secret: "${INDEX_SECRET}"
 
 weaviate:
   url: "http://weaviate:8080"
-
