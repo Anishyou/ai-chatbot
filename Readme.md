@@ -1,137 +1,158 @@
-# 🤖 FastAPI + Weaviate Chatbot
+# Website Chatbot (FastAPI + Weaviate)
 
-A production-ready chatbot backend using FastAPI, OpenAI, and Weaviate vector database. It allows secure website indexing and question answering only for indexed sites.
-
----
-
-## 🚀 Features
-
-- 🔒 Secure indexing via API token (`X-INDEX-TOKEN`)
-- 📄 Live crawling + chunked document embedding
-- 🔍 Retrieval-augmented generation (RAG) using GPT
-- 🧠 Vector storage via Weaviate
-- ✅ CORS and health checks
-- 📦 Docker + Docker Compose support
+A production-ready Python service for a domain-restricted website chatbot powered by **FastAPI** and **Weaviate**.  
+It crawls and indexes website content into a vector database, and answers questions **only** using the ingested content.
 
 ---
 
-## 🛠️ Project Structure
+## ✨ Features
+
+- 🚀 **FastAPI** backend with OpenAPI docs
+- 📚 Retrieval-Augmented Generation (RAG) using **Weaviate**
+- 🤖 OpenAI embeddings & responses
+- 🐳 Docker & Docker Compose ready
+- 🔒 Domain-restricted answering
+- 📦 Configurable via `.env`
+
+---
+
+## 📂 Project Structure
 
 ```
+chatbot/
 ├── app/
-│   ├── main.py                # FastAPI entry point
-│   ├── chatbot.py             # LLM interaction logic
-│   ├── config.py              # Loads YAML + .env configs
-│   ├── logger.py              # Logger setup
-│   ├── website_loader.py      # Crawler for websites
-│   ├── vectorizer.py          # Embedding + Weaviate upload
-│   └── weaviate_client.py     # Client + schema creation
+│   ├── parsing/
+│   │   ├── contact_hours.py
+│   │   ├── menu_struct.py
+│   │   └── pdf_image.py
+│   ├── verticals/
+│   │   ├── detect.py
+│   │   ├── restaurant.py
+│   │   └── __init__.py
+│   ├── chatbot.py
+│   ├── config.py
+│   ├── logger.py
+│   ├── main.py
+│   ├── profile_store.py
+│   ├── vectorizer.py
+│   ├── weaviate_client.py
+│   └── website_loader.py
 ├── config/
-│   ├── application.yml        # App and Weaviate config
-│   └── llm_config.yml         # OpenAI models
-├── .env                       # API secrets
-├── Dockerfile                 # Python + Uvicorn
-├── docker-compose.yml         # Local multi-service setup
-└── requirements.txt           # Python dependencies
+├── .dockerignore
+├── .env
+├── .gitignore
+├── docker-compose.yml
+├── Dockerfile
+├── poetry.lock
+└── README.md
 ```
 
 ---
 
-## 🧪 Local Development
+## ⚙️ Setup
 
-### 1. Clone + Configure
+### 1) Prerequisites
+
+- Python 3.10+
+- Docker & Docker Compose (optional but recommended)
+- `TOKEN` and `OPENAI_API_KEY` in `.env`
+- A running Weaviate instance
+
+### 2) Environment Variables
+
+| Variable | Description |
+|---|---|
+| TOKEN | Authentication token for accessing the API |
+| OPENAI_API_KEY | API key for OpenAI (used for embeddings/generation) |
+| WEAVIATE_URL | Base URL of your Weaviate instance |
+| WEAVIATE_API_KEY | API key for Weaviate (if required) |
+| ALLOWED_DOMAIN | Domain the chatbot is allowed to answer from |
+
+
+Create your `.env` file:
+
 ```bash
-git clone https://github.com/yourname/chatbot.git
-cd chatbot
-cp .env.example .env  # or create one manually
+cp .env.example .env
+# then edit .env with your keys and URLs
+#Add OPENAI_API_KEY-""
+# Add INDEX_SECRET-""
+
+
 ```
 
-### 2. Edit `.env`
-```env
-OPENAI_API_KEY=your-openai-key
-INDEX_SECRET=some-secret-token
+### 3) Install dependencies (local dev)
+
+```bash
+pip install -r requirements.txt
+# or if using Poetry:
+poetry install
 ```
 
-### 3. Run Docker
+---
+
+## 🚀 Running the Service
+
+### Local (dev)
+
+```bash
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### Docker
+
+```bash
+docker build -t chatbot-app .
+docker run --env-file .env -p 8000:8000 chatbot-app
+```
+
+### Docker Compose
+
 ```bash
 docker compose up --build
 ```
 
-> - FastAPI: [http://localhost:8000/docs](http://localhost:8000/docs)
-> - Weaviate: [http://localhost:8080/v1/.well-known/ready](http://localhost:8080/v1/.well-known/ready)
+---
+
+## 🔌 API Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| POST | /ingest | Crawl/ingest pages for the configured domain(s) |
+| POST | /ask | Ask a question and get an answer grounded in ingested data |
+| GET | /health | Service health check |
+| GET | /docs | OpenAPI/Swagger UI |
+
+Once running, open: **[http://localhost:8000/docs](http://localhost:8000/docs)**
 
 ---
 
-## ⚙️ Configuration
+## 🛠 Development Notes
 
-### `config/application.yml`
-```yaml
-app:
-  port: 8000
-  host: "0.0.0.0"
-  allowed_origins:
-    - "http://localhost"
-    - "http://127.0.0.1"
-  index_secret: "${INDEX_SECRET}"
-
-weaviate:
-  url: "http://weaviate:8080"
-```
-
-### `config/llm_config.yml`
-```yaml
-llm:
-  provider: "openai"
-  model: "gpt-4o"
-  embedding_model: "text-embedding-3-small"
-```
+- Code style: `black` + `isort` + `flake8`
+- Tests: `pytest -q`
+- Logging: structured JSON logging is recommended
 
 ---
 
-## 🔐 Secured Endpoints
+## 🐳 Docker Compose Services
 
-### `POST /index`
-
-Index a website (admin only)
-
-**Headers**:
-```
-X-INDEX-TOKEN: your-secret-token
-```
-
-**Query param**:
-```
-website=https://example.com
-```
+| Service | Description |
+|---|---|
+| chatbot-app | FastAPI backend |
+| weaviate    | Vector database for embeddings & retrieval |
 
 ---
 
-### `POST /ask`
+## 📜 License
 
-Ask a question (only for indexed websites)
-
-**Request body**:
-```json
-{
-  "q": "What services do you offer?",
-  "website": "https://example.com"
-}
-```
+MIT License — feel free to use and adapt.
 
 ---
 
-### `GET /health`
+## 🤝 Contributing
 
-Health check.
-
-## 🧼 Cleanup
-
-```bash
-docker compose down --volumes
-```
-
----
-
-## 📄 License
-
-MIT – Use it, modify it, deploy it.
+1. Fork the repo
+2. Create your feature branch: `git checkout -b feature/my-feature`
+3. Commit changes: `git commit -m 'Add my feature'`
+4. Push to the branch: `git push origin feature/my-feature`
+5. Create a Pull Request
