@@ -10,6 +10,7 @@ class Config:
     def __init__(self):
         config_path = Path(__file__).parent.parent / "config"
 
+        # --- Application config ---
         try:
             with open(config_path / "application.yml") as f:
                 full_app_config = yaml.safe_load(f)
@@ -18,19 +19,22 @@ class Config:
         except Exception as e:
             raise RuntimeError(f"Failed to load application.yml: {e}")
 
+        # --- LLM config ---
         try:
             with open(config_path / "llm_config.yml") as f:
                 self.llm_config = yaml.safe_load(f).get("llm", {})
         except Exception as e:
             raise RuntimeError(f"Failed to load llm_config.yml: {e}")
 
-        # Validate and assign app config
+        # --- Validate & assign ---
         self.ALLOWED_ORIGINS = self._validate_origins(self.app_config.get("allowed_origins", []))
         self.INDEX_SECRET = os.getenv("INDEX_SECRET", "")
 
         # Weaviate
-        self.WEAVIATE_URL = self.weaviate_config.get("url", "http://localhost:8080")
-        self.WEAVIATE_GRPC_PORT = self.weaviate_config.get("grpc_port", 50051)
+        self.WEAVIATE_URL = os.getenv(
+            "WEAVIATE_URL",
+            self.weaviate_config.get("url", "http://localhost:8080")
+        )
 
         # LLM
         self.LLM_MODEL = self.llm_config.get("model", "gpt-4")

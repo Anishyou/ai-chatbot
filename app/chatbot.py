@@ -1,76 +1,81 @@
-from app.logger import get_logger
-from app.weaviate_client import get_client as get_weaviate_client
-from app.config import config
-from app.website_loader import crawl_website
-from app.vectorizer import upload_documents
+import json
 from openai import OpenAI
+from app.config import config
+from app.logger import get_logger
+from app.weaviate_client import get_client
 
 logger = get_logger("chatbot")
-
-# Initialize OpenAI client once
-client_openai = OpenAI(api_key=config.OPENAI_API_KEY)
+client_oa = OpenAI(api_key=config.OPENAI_API_KEY)
 
 
-def ask(query: str, website: str) -> str:
-    # 1. Embed the query
-    embedding_response = client_openai.embeddings.create(
-        input=query,
-        model=config.LLM_EMBEDDING_MODEL
-    )
-    query_vector = embedding_response.data[0].embedding
-
-    # 2. Query Weaviate
-    client_weaviate = get_weaviate_client()
+def _fetch_profile_facts(website: str) -> dict:
+    """
+    Fetch stored BusinessProfile facts from Weaviate.
+    """
+    client = get_client()
     try:
-        result = (
-            client_weaviate.query
-            .get("WebContent", ["text", "source"])
-            .with_near_vector({"vector": query_vector})
-            .with_where({
-                "path": ["website"],
-                "operator": "Equal",
-                "valueString": website
-            })
-            .with_limit(3)
-            .do()
-        )
+        result = client.query.get(
+            "BusinessProfile",
+            [
+                "name", "telephone", "email", "address",
+                "openingHours", "menuUrls", "menuItems",
+                "priceRange", "cuisines", "social", "vertical"
+            ]
+        ).with_where({
+            "path": ["website"],
+            "operator": "Equal",
+            "valueText": website
+        }).with_limit(1).do()
 
-        docs = result["data"]["Get"].get("WebContent", [])
-        context = " ".join(doc["text"] for doc in docs)
-
+        items = result.get("data", {}).get("Get", {}).get("BusinessProfile", [])
+        return items[0] if items else {}
     except Exception as e:
-        logger.warning(f"Vector DB query failed: {e}")
-        context = ""
+        logger.warning(f"Profile fetch failed: {e}")
+        return {}
 
-    # 3. Fallback: Live crawl if context is empty
-    if not context.strip():
-        logger.info(f"No vector results found for {website}, crawling live...")
-        docs = crawl_website(website, limit=5)
-        upload_documents(docs, website)
-        context = " ".join(doc["text"] for doc in docs if "text" in doc)
 
-    # 4. Compose GPT messages
-    messages = [
-        {
-            "role": "system",
-            "content": (
-                f"You are a helpful assistant for visitors of {website}. "
-                "Use the provided context from the website to answer accurately. "
-                "If the question is about the company, address, team, partners, services, or anything on the site, answer with high detail. "
-                "If unsure, say so — but do not make up facts."
-            )
+def ask(question: str, website: str) -> str:
+    profile = _fetch_profile_facts(website)
 
-        },
-        {
-            "role": "user",
-            "content": f"Context:\n{context}\n\nQuestion: {query}"
-        }
-    ]
+    # If Q matches a fact directly
+    q_lower = question.lower()
+    if "phone" in q_lower or "call" in q_lower:
+        if profile.get("telephone"):
+            return f"The phone number is {profile['telephone']}"
+    if "email" in q_lower:
+        if profile.get("email"):
+            return f"The email address is {profile['email']}"
+    if "address" in q_lower or "where" in q_lower:
+        if profile.get("address"):
+            return f"The address is {profile['address']}"
+    if "menu" in q_lower:
+        if profile.get("menuUrls"):
+            return f"Menu: {', '.join(profile['menuUrls'])}"
 
-    # 5. Ask OpenAI GPT model
-    response = client_openai.chat.completions.create(
-        model=config.LLM_MODEL,
-        messages=messages
-    )
+    # Otherwise do vector search
+    client = get_client()
+    try:
+        emb = client_oa.embeddings.create(
+            input=question,
+            model=config.LLM_EMBEDDING_MODEL
+        ).data[0].embedding
 
-    return response.choices[0].message.content
+        res = client.query.get(
+            "WebContent",
+            ["text", "source", "title"]
+        ).with_near_vector({"vector": emb, "certainty": 0.7}) \
+            .with_where({"path": ["website"], "operator": "Equal", "valueText": website}) \
+            .with_limit(4).do()
+
+        docs = res.get("data", {}).get("Get", {}).get("WebContent", [])
+        context = "\n\n".join(f"{d.get('title') or ''}\n{d['text']}" for d in docs)
+
+        prompt = f"Answer the question based on the context below.\n\nContext:\n{context}\n\nQ: {question}\nA:"
+        resp = client_oa.chat.completions.create(
+            model=config.LLM_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception as e:
+        logger.error(f"Vector Q failed: {e}")
+        return "Sorry, I couldn't find an answer."

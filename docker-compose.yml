@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   weaviate:
-    image: semitechnologies/weaviate:1.25.3
+    image: semitechnologies/weaviate:1.24.4
     ports:
       - "8080:8080"
     environment:
@@ -11,26 +11,35 @@ services:
       PERSISTENCE_DATA_PATH: "/var/lib/weaviate"
       DEFAULT_VECTORIZER_MODULE: "none"
       ENABLE_MODULES: "none"
+      CLUSTER_HOSTNAME: "node1"
     volumes:
       - weaviate_data:/var/lib/weaviate
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/v1/.well-known/ready"]
       interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 30
 
-  chatbot:
+  app:
     build:
       context: .
+      dockerfile: Dockerfile
     ports:
       - "8000:8000"
     env_file:
       - .env
+    environment:
+      WEAVIATE_URL: http://weaviate:8080
     volumes:
       - .:/app
     depends_on:
       weaviate:
         condition: service_healthy
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0
+      --port 8000
+      --reload
 
 volumes:
   weaviate_data: {}
